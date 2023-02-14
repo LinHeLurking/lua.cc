@@ -65,9 +65,7 @@
             "inherits": "ninja-gcc",
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_C_FLAGS": "-fstandalone-debug",
-                "CMAKE_CXX_FLAGS": "-fstandalone-debug"
+                "CMAKE_BUILD_TYPE": "Debug"
             }
         },
         {
@@ -85,9 +83,7 @@
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
                 "CMAKE_EXPORT_COMPILE_COMMANDS": true,
-                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-                "CMAKE_C_FLAGS": "-fstandalone-debug",
-                "CMAKE_CXX_FLAGS": "-fstandalone-debug"
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
             }
         }
     ]
