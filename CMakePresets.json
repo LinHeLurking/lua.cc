@@ -1,0 +1,94 @@
+{
+    "version": 3,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 20,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "ninja-clang",
+            "hidden": true,
+            "binaryDir": "${sourceDir}/build",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++"
+            }
+        },
+        {
+            "name": "ninja-gcc",
+            "hidden": true,
+            "binaryDir": "${sourceDir}/build",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++"
+            }
+        },
+        {
+            "name": "ninja-clang-debug",
+            "displayName": "Ninja Debug (Clang)",
+            "inherits": "ninja-clang",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_FLAGS": "-fstandalone-debug",
+                "CMAKE_CXX_FLAGS": "-fstandalone-debug"
+            }
+        },
+        {
+            "name": "ninja-clang-release",
+            "displayName": "Ninja Release (Clang)",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "ninja-clang-release-with-debug-info",
+            "displayName": "Ninja RelWithDebInfo (Clang)",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_C_FLAGS": "-fstandalone-debug",
+                "CMAKE_CXX_FLAGS": "-fstandalone-debug"
+            }
+        },
+        {
+            "name": "ninja-gcc-debug",
+            "displayName": "Ninja Debug (GCC)",
+            "inherits": "ninja-gcc",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_FLAGS": "-fstandalone-debug",
+                "CMAKE_CXX_FLAGS": "-fstandalone-debug"
+            }
+        },
+        {
+            "name": "ninja-gcc-release",
+            "displayName": "Ninja Release (GCC)",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "ninja-gcc-release-with-debug-info",
+            "displayName": "Ninja RelWithDebInfo (GCC)",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_C_FLAGS": "-fstandalone-debug",
+                "CMAKE_CXX_FLAGS": "-fstandalone-debug"
+            }
+        }
+    ]
+}
