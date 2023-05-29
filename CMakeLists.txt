@@ -15,3 +15,6 @@ message(STATUS "LuaJIT source dir: ${LUAJIT_SOURCE_DIR}")
 
 add_executable(manual manual.cpp)
 target_link_libraries(manual libluajit ${CMAKE_DL_LIBS}) 
+
+add_executable(lua_err lua_err.cpp)
+target_link_libraries(lua_err libluajit ${CMAKE_DL_LIBS})

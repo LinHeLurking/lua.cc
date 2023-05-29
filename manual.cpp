@@ -94,30 +94,9 @@ void lua_push_data_dict(lua_State* L, DataDict* ptr) {
   lua_setmetatable(L, -2);
 }
 
-void lua_check_err(lua_State* L, int err) {
-  if (err == 0) return;
-
-  std::cout << "lua_pcall failed!" << std::endl;
-  switch (err) {
-    case LUA_ERRRUN:
-      std::cout << "Runtime error" << std::endl;
-      break;
-    case LUA_ERRMEM:
-      std::cout << "Memory allocation error" << std::endl;
-      break;
-    case LUA_ERRERR:
-      std::cout << "Error while handling error" << std::endl;
-      break;
-    default:
-      std::cout << "Other error" << std::endl;
-  }
-  std::cout << "Error message: " << std::endl;
-  std::cout << lua_tostring(L, -1) << std::endl;
-}
-
 int main(int argc, const char* argv[]) {
   if (argc < 3) {
-    std::cout << "Usage: <executable> <lua_file> <lua_func> [<lua_func>...]"
+    std::cout << "Usage: <executable> <lua_file> <lua_func>"
               << std::endl;
     return -1;
   }
@@ -142,8 +121,7 @@ int main(int argc, const char* argv[]) {
 
   lua_getglobal(L, func_name);
   lua_push_data_dict(L, &dict);
-  int res = lua_pcall(L, 1, 0, 0);
-  lua_check_err(L, res);
+  lua_pcall(L, 1, 0, 0);
 
   std::cout << "Data dict constents in c++: " << std::endl;
   for (const auto& field : {"a", "b", "c", "d"}) {
