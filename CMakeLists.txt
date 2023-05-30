@@ -2,6 +2,7 @@ project("LuaIntegration")
 cmake_minimum_required(VERSION 3.13)
 include(ExternalProject)
 
+set(CMAKE_POSITION_INDEPENDENT_CODE true)
 set(CMAKE_CXX_STANDARD 17)
 
 
