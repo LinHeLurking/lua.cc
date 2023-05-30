@@ -1,5 +1,7 @@
 #include <iostream>
 
+#include "logging.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -15,29 +17,26 @@ extern "C" {
 void lua_check_err(lua_State* L, int err) {
   if (err == 0) return;
 
-  std::cout << "lua_pcall failed!" << std::endl;
+  logf("lua_pcall failed!");
   switch (err) {
     case LUA_ERRRUN:
-      std::cout << "Runtime error" << std::endl;
+      logf("Runtime error");
       break;
     case LUA_ERRMEM:
-      std::cout << "Memory allocation error" << std::endl;
+      logf("Memory allocation error");
       break;
     case LUA_ERRERR:
-      std::cout << "Error while handling error" << std::endl;
+      logf("Error while handling error");
       break;
     default:
-      std::cout << "Other error" << std::endl;
+      logf("Other error");
   }
-  std::cout << "Error message: " << std::endl;
-  std::cout << lua_tostring(L, -1) << std::endl;
+  logf("Error message: %s", lua_tostring(L, -1));
 }
 
 int main(int argc, const char** argv) {
   if (argc < 4) {
-    std::cout
-        << "Usage: <executable> <lua_file> <err_lua_func> <correct_lua_func>"
-        << std::endl;
+    logf("Usage: <executable> <lua_file> <err_lua_func> <correct_lua_func>");
     return -1;
   }
   const char* file_name = argv[1];

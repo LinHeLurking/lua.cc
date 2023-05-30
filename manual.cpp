@@ -1,8 +1,7 @@
 #include <cassert>
-#include <cstdlib>
 #include <iostream>
-#include <unordered_map>
 
+#include "logging.h"
 #include "test_data.h"
 
 #ifdef __cplusplus
@@ -21,11 +20,11 @@ int lua_print_data_dict(lua_State* L) {
   DataDict** pptr =
       static_cast<DataDict**>(luaL_checkudata(L, 1, "DataDictMetaTable"));
   if (pptr == nullptr) {
-    std::cout << "print_data_dict null ptr" << std::endl;
+    logf("print_data_dict null ptr");
   }
-  std::cout << "Data dict contents in lua: " << std::endl;
+  logf("Data dict contents in lua: ");
   for (const auto& key : {"a", "b", "c", "d"}) {
-    std::cout << key << ": " << (*pptr)->field(key) << std::endl;
+    logf("%s: %lf", key, (*pptr)->field(key));
   }
   return 0;
 }
@@ -34,7 +33,7 @@ int lua_data_dict_field(lua_State* L) {
   DataDict** pptr =
       static_cast<DataDict**>(luaL_checkudata(L, 1, "DataDictMetaTable"));
   if (pptr == nullptr) {
-    std::cout << "field null ptr" << std::endl;
+    logf("field null ptr");
   }
   const char* field = luaL_checkstring(L, 2);
   lua_pushnumber(L, (*pptr)->field(field));
@@ -45,7 +44,7 @@ int lua_data_dict_set_field(lua_State* L) {
   DataDict** pptr =
       static_cast<DataDict**>(luaL_checkudata(L, 1, "DataDictMetaTable"));
   if (pptr == nullptr) {
-    std::cout << "set_field null ptr" << std::endl;
+    logf("set_field null ptr");
   }
   const char* field = luaL_checkstring(L, 2);
   double value = luaL_checknumber(L, 3);
@@ -57,7 +56,7 @@ void lua_register_data_dict(lua_State* L) {
   int flag = luaL_newmetatable(L, "DataDictMetaTable");
   if (!flag) {
     // Metatable has already created. Report an error.
-    std::cout << "Meta table has already been created!" << std::endl;
+    logf("Meta table has already been created!");
     // NOTICE: Even if it has been created before, the created table is copied
     // onto the top of stack.
     return;
@@ -96,8 +95,7 @@ void lua_push_data_dict(lua_State* L, DataDict* ptr) {
 
 int main(int argc, const char* argv[]) {
   if (argc < 3) {
-    std::cout << "Usage: <executable> <lua_file> <lua_func>"
-              << std::endl;
+    logf("Usage: <executable> <lua_file> <lua_func>");
     return -1;
   }
   const char* file_name = argv[1];
@@ -106,9 +104,9 @@ int main(int argc, const char* argv[]) {
   Data data;
   DataDict dict(data);
 
-  std::cout << "Data dict constents in c++: " << std::endl;
+  logf("Data dict constents in c++: ");
   for (const auto& field : {"a", "b", "c", "d"}) {
-    std::cout << field << ": " << dict.field(field) << std::endl;
+    logf("%s: %lf", field, dict.field(field));
   }
 
   lua_State* L = luaL_newstate();  // create a new lua instance
@@ -123,9 +121,9 @@ int main(int argc, const char* argv[]) {
   lua_push_data_dict(L, &dict);
   lua_pcall(L, 1, 0, 0);
 
-  std::cout << "Data dict constents in c++: " << std::endl;
+  logf("Data dict constents in c++: ");
   for (const auto& field : {"a", "b", "c", "d"}) {
-    std::cout << field << ": " << dict.field(field) << std::endl;
+    logf("%s: %lf", field, dict.field(field));
   }
 
   return 0;
