@@ -13,8 +13,11 @@ set_target_properties(libluajit PROPERTIES
 include_directories("${LUAJIT_SOURCE_DIR}")
 message(STATUS "LuaJIT source dir: ${LUAJIT_SOURCE_DIR}")
 
-add_executable(method method.cpp)
+add_executable(method src/manual/method.cpp)
 target_link_libraries(method libluajit ${CMAKE_DL_LIBS}) 
 
-add_executable(lua_err lua_err.cpp)
+add_executable(lua_err src/manual/lua_err.cpp)
 target_link_libraries(lua_err libluajit ${CMAKE_DL_LIBS})
+
+add_executable(getter_setter src/manual/getter_setter.cpp)
+target_link_libraries(getter_setter libluajit ${CMAKE_DL_LIBS})

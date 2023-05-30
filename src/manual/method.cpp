@@ -1,15 +1,15 @@
 #include <cassert>
 #include <iostream>
 
-#include "logging.h"
+#include "../common/logging.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include "luajit/src/lauxlib.h"
-#include "luajit/src/lua.h"
-#include "luajit/src/lualib.h"
+#include "../../luajit/src/lauxlib.h"
+#include "../../luajit/src/lua.h"
+#include "../../luajit/src/lualib.h"
 
 #ifdef __cplusplus
 }
