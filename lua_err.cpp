@@ -54,6 +54,8 @@ int main(int argc, const char** argv) {
   lua_pushstring(L, "c");
   int res = lua_pcall(L, 3, 0, 0);
   lua_check_err(L, res);
+  logf("stack top: %s", lua_tostring(L, -2));
+  logf("null means stack is cleared on error!");
 
   lua_getglobal(L, correct_func_name);
   lua_pushstring(L, "a");
