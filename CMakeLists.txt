@@ -22,3 +22,6 @@ target_link_libraries(lua_err libluajit ${CMAKE_DL_LIBS})
 
 add_executable(getter_setter src/manual/getter_setter.cpp)
 target_link_libraries(getter_setter libluajit ${CMAKE_DL_LIBS})
+
+add_executable(virtual_func src/manual/virtual_func.cpp)
+target_link_libraries(virtual_func libluajit ${CMAKE_DL_LIBS})
