@@ -8,18 +8,6 @@
 #include "../common/logging.h"
 #include "util.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#include "lauxlib.h"
-#include "lua.h"
-#include "lualib.h"
-
-#ifdef __cplusplus
-}
-#endif
-
 class Person {
  public:
   int age_;
@@ -40,7 +28,6 @@ class Person {
   BOOST_DESCRIBE_CLASS(Person, (), (age_, name_, career_, greet, aging), (),
                        ());
 };
-
 
 int main(int argc, char** argv) {
   logf("Information about class `Person`:");

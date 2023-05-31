@@ -33,3 +33,6 @@ target_link_libraries(virtual_func libluajit ${CMAKE_DL_LIBS})
 
 add_executable(reflection src/reflection/reflection.cpp)
 target_link_libraries(reflection Boost::boost)
+
+add_executable(oop_lua src/reflection/oop_lua.cpp)
+target_link_libraries(oop_lua libluajit ${CMAKE_DL_LIBS})

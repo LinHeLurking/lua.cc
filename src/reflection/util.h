@@ -1,4 +1,5 @@
 #pragma once
+
 #include <boost/callable_traits/remove_member_cv.hpp>
 #include <boost/core/demangle.hpp>
 #include <boost/core/type_name.hpp>
