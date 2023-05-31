@@ -2,7 +2,17 @@ project("LuaIntegration")
 cmake_minimum_required(VERSION 3.13)
 include(ExternalProject)
 
-set(CMAKE_POSITION_INDEPENDENT_CODE true)
+set(BOOST_ROOT "${CMAKE_SOURCE_DIR}/boost_1_82_0")
+set(Boost_USE_STATIC_LIBS ON) 
+set(Boost_USE_MULTITHREADED ON)  
+set(Boost_USE_STATIC_RUNTIME ON) 
+find_package(Boost COMPONENTS) 
+
+if(Boost_FOUND)
+    include_directories(${Boost_INCLUDE_DIRS}) 
+endif()
+
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_STANDARD 17)
 
 
