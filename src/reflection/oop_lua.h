@@ -1,12 +1,19 @@
 #pragma once
 
+#include <libintl.h>
+
 #include <cassert>
 #include <cstdlib>
+#include <regex>
 #include <string>
+#include <tuple>
 #include <type_traits>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "../common/logging.h"
+#include "util.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,69 +37,6 @@ class Lua {
       logf("call error: %s", lua_tostring(lua_, -1));
     }
     return flag;
-  }
-
- public:
-  Lua() {
-    lua_ = luaL_newstate();
-    luaL_openlibs(lua_);
-  }
-
-  Lua(const std::vector<std::string>& load_files) : Lua() {
-    for (const auto& file : load_files) {
-      int flag = luaL_dofile(lua_, file.c_str());
-      if (flag) {
-        logf("Error when loading lua files: %s", file.c_str());
-        throw std::runtime_error("Lua load fail");
-      }
-    }
-  }
-
-  using IgnoredRetT = void*;
-  inline static void* IGNORED = 0;
-
-  // Pushes int/float/double... values into lua stack
-  template <class T,
-            typename std::enable_if_t<std::is_arithmetic_v<T>, int> = 0>
-  inline void push(T x) noexcept {
-    lua_pushnumber(lua_, x);
-  }
-
-  // Pushes C style string into lua stack
-  template <class T,
-            typename std::enable_if_t<std::is_same_v<T, const char*>, int> = 1>
-  inline void push(T s) noexcept {
-    lua_pushstring(lua_, s);
-  }
-
-  // Pushes C++ style string into lua stack. Both `std::string&` and `const
-  // std::string&` are ok. Does not receive `std::string`.
-  template <class T,
-            typename std::enable_if_t<
-                std::is_same_v<std::string&, std::remove_const_t<T>>, int> = 2>
-  inline void push(T s) noexcept {
-    lua_pushstring(lua_, s.c_str());
-  }
-
-  // Pops int/float/double.. values from lua stack.
-  template <class T,
-            typename std::enable_if_t<std::is_arithmetic_v<T>, int> = 0>
-  inline T pop() noexcept {
-    T ret = lua_tonumber(lua_, -1);
-    lua_pop(lua_, 1);
-    return ret;
-  }
-
-  // Pops C++ style string from lua stack.
-  // Due to potential memory free by lua GC, this function copy all string data
-  // out.
-  template <class T,
-            typename std::enable_if_t<std::is_same_v<std::string, T>, int> = 1>
-  inline T pop() noexcept {
-    const char* c_str = lua_tostring(lua_, -1);
-    std::string ret = c_str;
-    lua_pop(lua_, 1);
-    return ret;
   }
 
   template <class T>
@@ -121,6 +65,39 @@ class Lua {
       ret.first = lua->pop<T>();
     }
   };
+
+ public:
+  Lua() {
+    lua_ = luaL_newstate();
+    luaL_openlibs(lua_);
+  }
+
+  Lua(const std::vector<std::string>& load_files) : Lua() {
+    for (const auto& file : load_files) {
+      int flag = luaL_dofile(lua_, file.c_str());
+      if (flag) {
+        logf("Error when loading lua files: %s", file.c_str());
+        throw std::runtime_error("Lua load fail");
+      }
+    }
+  }
+
+  inline static lua_detail::IgnoredRetT IGNORED = 0;
+
+  template <class T>
+  inline void push(T x) noexcept {
+    lua_detail::push(lua_, x);
+  }
+
+  template <class T>
+  inline void register_type() {
+    lua_detail::register_type<T>(lua_);
+  }
+
+  template <class T>
+  inline T pop() noexcept {
+    return lua_detail::pop<T>(lua_);
+  }
 
   template <class Ret, class... Arg>
   int call(const char* lua_func_name, Ret& ret, Arg&&... arg) {

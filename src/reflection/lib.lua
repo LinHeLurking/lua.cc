@@ -13,3 +13,14 @@ end
 function num_n_str()
   return -1, "Hello!"
 end
+
+function describe_obj(obj)
+  print(getmetatable(obj))
+  for k,v in pairs(getmetatable(obj)) do
+    print(k, v)
+  end
+  -- print("[Lua] This is obj: {" .. "x_: " .. obj.x_ .. "y_: " .. obj.y_ .. "}")
+  -- print("[Lua] Change value inside lua")
+  -- obj.x_ = -1
+  -- obj.y_ = "Lua Surprise!"
+end
