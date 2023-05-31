@@ -8,9 +8,9 @@
 extern "C" {
 #endif
 
-#include "../../luajit/src/lauxlib.h"
-#include "../../luajit/src/lua.h"
-#include "../../luajit/src/lualib.h"
+#include "lauxlib.h"
+#include "lua.h"
+#include "lualib.h"
 
 #ifdef __cplusplus
 }

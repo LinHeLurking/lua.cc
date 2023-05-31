@@ -3,18 +3,13 @@ cmake_minimum_required(VERSION 3.13)
 include(ExternalProject)
 
 set(BOOST_ROOT "${CMAKE_SOURCE_DIR}/boost_1_82_0")
-set(Boost_USE_STATIC_LIBS ON) 
-set(Boost_USE_MULTITHREADED ON)  
-set(Boost_USE_STATIC_RUNTIME ON) 
-find_package(Boost COMPONENTS) 
-
-if(Boost_FOUND)
-    include_directories(${Boost_INCLUDE_DIRS}) 
-endif()
+set(BOOST_LIBRARY_DIRS "${CMAKE_SOURCE_DIR}/boost_1_82_0/lib")
+find_package(Boost REQUIRED) 
+message(STATUS "Boost include: ${Boost_INCLUDE_DIRS}")
+include_directories("${Boost_INCLUDE_DIRS}")
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_STANDARD 17)
-
 
 add_library(libluajit STATIC IMPORTED)
 set(LUAJIT_SOURCE_DIR "${CMAKE_SOURCE_DIR}/luajit/src")
@@ -35,3 +30,6 @@ target_link_libraries(getter_setter libluajit ${CMAKE_DL_LIBS})
 
 add_executable(virtual_func src/manual/virtual_func.cpp)
 target_link_libraries(virtual_func libluajit ${CMAKE_DL_LIBS})
+
+add_executable(reflection src/reflection/reflection.cpp)
+target_link_libraries(reflection Boost::boost)
