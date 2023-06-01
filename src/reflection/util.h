@@ -1,17 +1,21 @@
 #pragma once
 
-#include <boost/callable_traits/remove_member_cv.hpp>
+#include <boost/callable_traits/args.hpp>
+#include <boost/callable_traits/remove_member_const.hpp>
+#include <boost/callable_traits/remove_noexcept.hpp>
+#include <boost/callable_traits/return_type.hpp>
 #include <boost/core/demangle.hpp>
 #include <boost/core/type_name.hpp>
+#include <boost/describe/members.hpp>
+#include <boost/describe/modifiers.hpp>
+#include <boost/mp11/algorithm.hpp>
 #include <functional>
 #include <regex>
+#include <tuple>
 #include <type_traits>
 
 #include "../common/logging.h"
-#include "boost/core/type_name.hpp"
-#include "boost/describe/members.hpp"
-#include "boost/describe/modifiers.hpp"
-#include "boost/mp11/algorithm.hpp"
+#include "boost/mp11/detail/mp_with_index.hpp"
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,6 +28,8 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
+
+namespace lua_detail {
 
 template <class T>
 struct member_pointer {};
@@ -45,13 +51,10 @@ const char* name_from_ptr(Ptr ptr) {
   return name.c_str();
 }
 
-class ClazzLuaMeta {
+class ClazzMeta {
  public:
-  std::unordered_map<std::string, lua_CFunction> methods_,
-      getters_, setters_;
+  std::unordered_map<std::string, lua_CFunction> methods_, getters_, setters_;
 };
-
-namespace lua_detail {
 
 using IgnoredRetT = void*;
 inline static IgnoredRetT IGNORED = 0;
@@ -112,15 +115,14 @@ inline T pop(lua_State* lua) noexcept {
 }
 
 template <class T>
-int __xxx__(lua_State *l) {
-  return 0;
-}
-
-template <class T>
 inline void register_type(lua_State* lua) {
   int flag;
-  auto name = boost::core::type_name<T>();
-  auto type_ptr_prototype_name = name + "PtrPrototype";
+  // These variables are static because lambda expressions need them but cannot
+  // capture them.
+  static auto name = boost::core::type_name<T>();
+  static auto type_prototype_name = name + "PtrPrototype";
+  static auto type_metatable_name = name + "PtrMetatable";
+
   std::string prototype_exec_str =
       "\
       __prototype__ = { \n \
@@ -145,7 +147,7 @@ inline void register_type(lua_State* lua) {
       ";
   // Replace `__prototype__` as type ptr name
   prototype_exec_str = std::regex_replace(
-      prototype_exec_str, std::regex("__prototype__"), type_ptr_prototype_name);
+      prototype_exec_str, std::regex("__prototype__"), type_prototype_name);
   flag = luaL_dostring(lua, prototype_exec_str.c_str());
   if (flag != 0) {
     logf("Prototype register error: %s", lua_tostring(lua, -1));
@@ -153,39 +155,79 @@ inline void register_type(lua_State* lua) {
   }
 
   using namespace boost::describe;
+  using namespace boost::mp11;
+  using namespace boost::callable_traits;
 
-  static ClazzLuaMeta clazz_meta;
+  static ClazzMeta clazz_meta;
 
   // methods
-  // TODO:
+  using M_FUNCS = describe_members<T, mod_public | mod_function>;
+  mp_for_each<M_FUNCS>([lua](auto&& func) {
+    // These variables are static because lambda expressions need them but
+    // cannot capture them.
+    static std::string meta_table_name =
+        boost::core::type_name<T>() + "PtrMetatable";
+    static const char* fn_name = func.name;
+    static const auto fn_ptr = func.pointer;
+
+    lua_CFunction method = [](lua_State* lua) -> int {
+      // Raw func type. It might have `const` or `noexcept` modifier.
+      // Signature sample: int f(int) const noexcept;
+      using FuncTRaw = typename member_pointer<decltype(fn_ptr)>::type;
+      // Remove const/noexcept
+      using FuncT = remove_noexcept_t<remove_member_const_t<FuncTRaw>>;
+      // Return type of function.
+      using RetT = return_type_t<FuncT>;
+      // A std::tuple<...> of types of all arguments.
+      using ArgTupleTRaw = args_t<FuncT>;
+      // Remove ref/const/volatile modifiers. All values are copied from stack.
+      using ArgTupleT =
+          mp_transform<std::remove_cv_t,
+                       mp_transform<std::remove_reference_t, ArgTupleTRaw>>;
+
+      constexpr size_t N_ARG = std::tuple_size_v<ArgTupleT>;
+      ArgTupleT f_args;
+      auto pptr =
+          static_cast<T**>(luaL_checkudata(lua, 1, meta_table_name.c_str()));
+      // Extract all arguments into tuple in reverse order.
+      mp_for_each<mp_reverse<mp_iota_c<N_ARG>>>([lua, &f_args](auto I) {
+        // I is instance of std::integral_constant of size_t
+        using CurArgT = std::remove_reference_t<decltype(std::get<I>(f_args))>;
+        std::get<I>(f_args) = pop<CurArgT>(lua);
+      });
+      // Call member function with tuple, prepending reference of object ptr.
+      RetT res = std::apply(
+          fn_ptr, std::tuple_cat(std::make_tuple(std::ref(**pptr)), f_args));
+      push<RetT>(lua, res);
+      return 1;
+    };
+    clazz_meta.methods_[fn_name] = method;
+  });
 
   // Getters & setters
   using M_VARS = describe_members<T, mod_public>;
 
-  boost::mp11::mp_for_each<M_VARS>([](auto&& member) {
-    static std::string meta_table_name = boost::core::type_name<T>() + "PtrMetatable";
-
-    std::string name = member.name;
+  mp_for_each<M_VARS>([](auto&& member) {
+    // These variables are static because lambda expressions need them but
+    // cannot capture them.
+    static std::string meta_table_name =
+        boost::core::type_name<T>() + "PtrMetatable";
+    static const char* name = member.name;
     static auto pointer = member.pointer;
-    // Outside lambda capture controls access, so here it can capture all
-    // without problem.
+    using MemberT = typename member_pointer<decltype(pointer)>::type;
+    // Only lambda without capture can be correctly converted into
+    // C style function pointer, which is lua acceptable lua_CFunction.
     lua_CFunction getter = [](lua_State* lua) -> int {
-      auto pptr =
-          static_cast<T**>(luaL_checkudata(lua, 1, meta_table_name.c_str()));
-      lua_detail::push(lua, (**pptr).*pointer);
+      auto pptr = static_cast<T**>(
+          luaL_checkudata(lua, 1, type_metatable_name.c_str()));
+      lua_detail::push<MemberT>(lua, (*pptr)->*pointer);
       return 1;
     };
     lua_CFunction setter = [](lua_State* lua) -> int {
-      using member_type =
-          typename member_pointer<decltype(member.pointer)>::type;
-      // Get and pop the first arg (obj ptr)
-      auto pptr =
-          static_cast<T**>(luaL_checkudata(lua, 1, meta_table_name.c_str()));
-      lua_pop(lua, 1);
-      // Get and pop the second arg (new value)
-      auto value = lua_detail::pop<member_type>(lua);
-      // Set value through member pointer
-      (**pptr).*pointer = value;
+      auto pptr = static_cast<T**>(
+          luaL_checkudata(lua, 1, type_metatable_name.c_str()));
+      auto value = lua_detail::pop<MemberT>(lua);
+      (*pptr)->*pointer = value;
       return 0;
     };
 
@@ -208,7 +250,7 @@ inline void register_type(lua_State* lua) {
   setters.push_back({nullptr, nullptr});
 
   // Query prototype table and push it to stack
-  lua_getglobal(lua, type_ptr_prototype_name.c_str());  // will push
+  lua_getglobal(lua, type_prototype_name.c_str());  // will push
 
   // Extract field table `__methods`
   lua_getfield(lua, -1, "__methods");
@@ -234,11 +276,12 @@ inline void register_type(lua_State* lua) {
   // Pop table
   lua_pop(lua, 1);
 
-  flag = luaL_newmetatable(lua, "StudentPtrMetatable");  // will push
+  flag = luaL_newmetatable(lua, type_metatable_name.c_str());  // will push
   if (!flag) {
     logf("Meta table has already been created!");
     return;
   }
+  assert(lua_istable(lua, -1));
 
   // Now stack pos top (-1) is meta-table.
   // Next one (-2) is prototype table.
@@ -246,6 +289,7 @@ inline void register_type(lua_State* lua) {
   lua_getfield(lua, -2, "__impl_index");  // will push
   assert(lua_isfunction(lua, -1));
   lua_getfield(lua, -3, "__impl_newindex");  // will push
+  assert(lua_isfunction(lua, -1));
 
   // -1: `__impl_newindex`
   // -2: `__impl_index`

@@ -36,6 +36,7 @@ int main(int argc, char** argv) {
 
   using namespace boost::describe;
   using namespace boost::mp11;
+  using namespace lua_detail;
 
   using M_VAR = describe_members<Person, mod_public>;
   mp_for_each<M_VAR>(

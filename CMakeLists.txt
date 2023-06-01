@@ -1,5 +1,6 @@
-project("LuaIntegration")
 cmake_minimum_required(VERSION 3.13)
+
+project("LuaIntegration")
 include(ExternalProject)
 
 set(BOOST_ROOT "${CMAKE_SOURCE_DIR}/boost_1_82_0")

@@ -14,13 +14,25 @@ function num_n_str()
   return -1, "Hello!"
 end
 
-function describe_obj(obj)
-  print(getmetatable(obj))
-  for k,v in pairs(getmetatable(obj)) do
-    print(k, v)
+function consume_obj_a(obj)
+  print("[Lua] This is obj: {" .. "x_: " .. obj.x_ .. ", y_: " .. obj.y_ .. "}")
+  print("[Lua] Change value inside lua")
+  obj.x_ = -1
+  obj.y_ = "Lua Surprise!"
+end
+
+function consume_obj_b(obj)
+  print("[Lua] This is obj: {" .. "u_: " .. obj.u_ .. ", v_: " .. obj.v_ .. "}")
+  print("[Lua] Change value inside lua")
+  obj.u_ = "Lua Surprise!"
+  obj.v_ = -1
+end
+
+function take_action(obj)
+  print("[Lua] These are results on different actions: ")
+  local act_list = { "add", "sub", "mul", "div" }
+  local a, b = 3, 4
+  for _, act in ipairs(act_list) do
+    print("", act .. "(" .. a .. ", " .. b .. "):", obj:take_action(act, a, b))
   end
-  -- print("[Lua] This is obj: {" .. "x_: " .. obj.x_ .. "y_: " .. obj.y_ .. "}")
-  -- print("[Lua] Change value inside lua")
-  -- obj.x_ = -1
-  -- obj.y_ = "Lua Surprise!"
 end
