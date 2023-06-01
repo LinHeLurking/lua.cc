@@ -51,9 +51,17 @@ const char* name_from_ptr(Ptr ptr) {
   return name.c_str();
 }
 
+template <class T>
 class ClazzMeta {
  public:
-  std::unordered_map<std::string, lua_CFunction> methods_, getters_, setters_;
+  // These variables are static because lambda expressions need them but cannot
+  // capture them.
+  inline static auto NAME = boost::core::type_name<T>();
+  inline static auto PROTOTYPE_NAME = NAME + "PtrPrototype";
+  inline static auto METATABLE_NAME = NAME + "PtrMetatable";
+  inline static std::unordered_map<std::string, lua_CFunction> METHODS = {},
+                                                               GETTERS = {},
+                                                               SETTERS = {};
 };
 
 using IgnoredRetT = void*;
@@ -115,14 +123,8 @@ inline T pop(lua_State* lua) noexcept {
 }
 
 template <class T>
-inline void register_type(lua_State* lua) {
+inline int register_prototype(lua_State* lua) {
   int flag;
-  // These variables are static because lambda expressions need them but cannot
-  // capture them.
-  static auto name = boost::core::type_name<T>();
-  static auto type_prototype_name = name + "PtrPrototype";
-  static auto type_metatable_name = name + "PtrMetatable";
-
   std::string prototype_exec_str =
       "\
       __prototype__ = { \n \
@@ -146,23 +148,71 @@ inline void register_type(lua_State* lua) {
       end \n \
       ";
   // Replace `__prototype__` as type ptr name
-  prototype_exec_str = std::regex_replace(
-      prototype_exec_str, std::regex("__prototype__"), type_prototype_name);
+  prototype_exec_str =
+      std::regex_replace(prototype_exec_str, std::regex("__prototype__"),
+                         ClazzMeta<T>::PROTOTYPE_NAME);
   flag = luaL_dostring(lua, prototype_exec_str.c_str());
   if (flag != 0) {
-    logf("Prototype register error: %s", lua_tostring(lua, -1));
-    return;
+    logf("Do string error: %s", lua_tostring(lua, -1));
+    return flag;
   }
+  // Prepare luaL_Reg
+  std::vector<luaL_Reg> methods, getters, setters;
+  for (const auto& [k, v] : ClazzMeta<T>::METHODS) {
+    methods.push_back({k.c_str(), v});
+  }
+  methods.push_back({nullptr, nullptr});
+  for (const auto& [k, v] : ClazzMeta<T>::GETTERS) {
+    getters.push_back({k.c_str(), v});
+  }
+  getters.push_back({nullptr, nullptr});
+  for (const auto& [k, v] : ClazzMeta<T>::SETTERS) {
+    setters.push_back({k.c_str(), v});
+  }
+  setters.push_back({nullptr, nullptr});
 
+  // Query prototype table and push it to stack
+  lua_getglobal(lua, ClazzMeta<T>::PROTOTYPE_NAME.c_str());  // will push
+
+  // Extract field table `__methods`
+  lua_getfield(lua, -1, "__methods");
+  assert(lua_istable(lua, -1));
+  // Register methods into `__methods` table.
+  luaL_register(lua, nullptr, methods.data());
+  // Pop table.
+  lua_pop(lua, 1);
+
+  // Extract field table `__getters`
+  lua_getfield(lua, -1, "__getters");
+  assert(lua_istable(lua, -1));
+  // Register getters into `__getters` table.
+  luaL_register(lua, nullptr, getters.data());
+  // Pop table.
+  lua_pop(lua, 1);
+
+  // Extract field table `__setters`
+  lua_getfield(lua, -1, "__setters");
+  assert(lua_istable(lua, -1));
+  // Register setters into `__setters` table.
+  luaL_register(lua, nullptr, setters.data());
+  // Pop table
+  lua_pop(lua, 1);
+
+  // Pop prototype table
+  lua_pop(lua, 1);
+
+  return 0;
+}
+
+template <class T>
+inline void extract_methods() {
   using namespace boost::describe;
   using namespace boost::mp11;
   using namespace boost::callable_traits;
 
-  static ClazzMeta clazz_meta;
-
   // methods
   using M_FUNCS = describe_members<T, mod_public | mod_function>;
-  mp_for_each<M_FUNCS>([lua](auto&& func) {
+  mp_for_each<M_FUNCS>([](auto&& func) {
     // These variables are static because lambda expressions need them but
     // cannot capture them.
     static std::string meta_table_name =
@@ -201,9 +251,15 @@ inline void register_type(lua_State* lua) {
       push<RetT>(lua, res);
       return 1;
     };
-    clazz_meta.methods_[fn_name] = method;
+    ClazzMeta<T>::METHODS[fn_name] = method;
   });
+}
 
+template <class T>
+inline void extract_getter_setter() {
+  using namespace boost::describe;
+  using namespace boost::mp11;
+  using namespace boost::callable_traits;
   // Getters & setters
   using M_VARS = describe_members<T, mod_public>;
 
@@ -219,67 +275,34 @@ inline void register_type(lua_State* lua) {
     // C style function pointer, which is lua acceptable lua_CFunction.
     lua_CFunction getter = [](lua_State* lua) -> int {
       auto pptr = static_cast<T**>(
-          luaL_checkudata(lua, 1, type_metatable_name.c_str()));
+          luaL_checkudata(lua, 1, ClazzMeta<T>::METATABLE_NAME.c_str()));
       lua_detail::push<MemberT>(lua, (*pptr)->*pointer);
       return 1;
     };
     lua_CFunction setter = [](lua_State* lua) -> int {
       auto pptr = static_cast<T**>(
-          luaL_checkudata(lua, 1, type_metatable_name.c_str()));
+          luaL_checkudata(lua, 1, ClazzMeta<T>::METATABLE_NAME.c_str()));
       auto value = lua_detail::pop<MemberT>(lua);
       (*pptr)->*pointer = value;
       return 0;
     };
 
-    clazz_meta.setters_[name] = setter;
-    clazz_meta.getters_[name] = getter;
+    ClazzMeta<T>::SETTERS[name] = setter;
+    ClazzMeta<T>::GETTERS[name] = getter;
   });
+}
 
-  std::vector<luaL_Reg> methods, getters, setters;
-  for (const auto& [k, v] : clazz_meta.methods_) {
-    methods.push_back({k.c_str(), v});
-  }
-  methods.push_back({nullptr, nullptr});
-  for (const auto& [k, v] : clazz_meta.getters_) {
-    getters.push_back({k.c_str(), v});
-  }
-  getters.push_back({nullptr, nullptr});
-  for (const auto& [k, v] : clazz_meta.setters_) {
-    setters.push_back({k.c_str(), v});
-  }
-  setters.push_back({nullptr, nullptr});
-
+template <class T>
+inline int register_metatable(lua_State* lua) {
   // Query prototype table and push it to stack
-  lua_getglobal(lua, type_prototype_name.c_str());  // will push
+  lua_getglobal(lua, ClazzMeta<T>::PROTOTYPE_NAME.c_str());  // will push
 
-  // Extract field table `__methods`
-  lua_getfield(lua, -1, "__methods");
-  assert(lua_istable(lua, -1));
-  // Register methods into `__methods` table.
-  luaL_register(lua, nullptr, methods.data());
-  // Pop table.
-  lua_pop(lua, 1);
-
-  // Extract field table `__getters`
-  lua_getfield(lua, -1, "__getters");
-  assert(lua_istable(lua, -1));
-  // Register getters into `__getters` table.
-  luaL_register(lua, nullptr, getters.data());
-  // Pop table.
-  lua_pop(lua, 1);
-
-  // Extract field table `__setters`
-  lua_getfield(lua, -1, "__setters");
-  assert(lua_istable(lua, -1));
-  // Register setters into `__setters` table.
-  luaL_register(lua, nullptr, setters.data());
-  // Pop table
-  lua_pop(lua, 1);
-
-  flag = luaL_newmetatable(lua, type_metatable_name.c_str());  // will push
+  int flag =
+      luaL_newmetatable(lua,
+                        ClazzMeta<T>::METATABLE_NAME.c_str());  // will push
   if (!flag) {
     logf("Meta table has already been created!");
-    return;
+    return 1;
   }
   assert(lua_istable(lua, -1));
 
@@ -300,6 +323,25 @@ inline void register_type(lua_State* lua) {
   lua_setfield(lua, -2, "__index");     // will pop
   // Clear stack
   lua_pop(lua, 2);
+  return 0;
 }
 
+template <class T>
+inline void register_type(lua_State* lua) {
+  extract_methods<T>();
+
+  extract_getter_setter<T>();
+
+  int flag = register_prototype<T>(lua);
+  if (flag != 0) {
+    logf("Prototype register error: %s", lua_tostring(lua, -1));
+    return;
+  }
+
+  register_metatable<T>(lua);
+  if (flag != 0) {
+    logf("Metatable register error: %s", lua_tostring(lua, -1));
+    return;
+  }
+}
 }  // namespace lua_detail
