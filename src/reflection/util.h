@@ -240,11 +240,11 @@ using ref_to_ptr_t = typename ref_to_ptr<T>::type;
 
 template <class T>
 inline constexpr bool is_registered_type_pointer_v =
-    std::is_pointer_v<T> && boost::describe::has_describe_members<T>::value;
+    std::is_pointer_v<T> && boost::describe::has_describe_members<std::decay_t<T>>::value;
 
 template <class T>
 inline constexpr bool is_registered_type_ref_v =
-    std::is_reference_v<T> && boost::describe::has_describe_members<T>::value;
+    std::is_reference_v<T> && boost::describe::has_describe_members<std::decay_t<T>>::value;
 
 template <class T>
 inline std::remove_pointer_t<T>& wrap_as_ref(T x) {
@@ -288,7 +288,7 @@ inline auto pop_args_impl(lua_State* lua, int index) noexcept {
     return std::ref(**pptr);
   } else {
     // Always fail check
-    static_assert(std::is_same_v<T, T*>, "Not supported type!");
+    static_assert(!std::is_same_v<T, T>, "Not supported type!");
   }
 }
 

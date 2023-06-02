@@ -36,3 +36,7 @@ function take_action(obj)
     print("", act .. "(" .. a .. ", " .. b .. "):", obj:take_action(act, a, b))
   end
 end
+
+function overwrite_append(x, y)
+  x:overwrite_append(y, " [[ Modified in Lua! ]] ")
+end
