@@ -6,7 +6,7 @@
 #include <type_traits>
 
 #include "../common/logging.h"
-#include "util.h"
+#include "../util/util.h"
 
 class Person {
  public:

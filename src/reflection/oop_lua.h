@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "../common/logging.h"
-#include "util.h"
+#include "../util/util.h"
 
 #ifdef __cplusplus
 extern "C" {
