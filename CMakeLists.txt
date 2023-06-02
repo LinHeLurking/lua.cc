@@ -33,7 +33,9 @@ add_executable(virtual_func src/manual/virtual_func.cpp)
 target_link_libraries(virtual_func libluajit ${CMAKE_DL_LIBS})
 
 add_executable(reflection src/reflection/reflection.cpp)
-target_link_libraries(reflection Boost::boost)
 
 add_executable(oop_lua src/reflection/oop_lua.cpp)
 target_link_libraries(oop_lua libluajit ${CMAKE_DL_LIBS})
+
+add_executable(perf src/perf/perf.cpp)
+target_link_libraries(perf libluajit ${CMAKE_DL_LIBS})
