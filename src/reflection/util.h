@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <boost/callable_traits/args.hpp>
 #include <boost/callable_traits/remove_member_const.hpp>
 #include <boost/callable_traits/remove_noexcept.hpp>
@@ -9,10 +10,12 @@
 #include <boost/describe/members.hpp>
 #include <boost/describe/modifiers.hpp>
 #include <boost/mp11/algorithm.hpp>
+#include <boost/mp11/tuple.hpp>
 #include <functional>
 #include <regex>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 
 #include "../common/logging.h"
 #include "boost/mp11/detail/mp_with_index.hpp"
@@ -56,9 +59,9 @@ class ClazzMeta {
  public:
   // These variables are static because lambda expressions need them but cannot
   // capture them.
-  inline static auto NAME = boost::core::type_name<T>();
-  inline static auto PROTOTYPE_NAME = NAME + "PtrPrototype";
-  inline static auto METATABLE_NAME = NAME + "PtrMetatable";
+  inline static std::string NAME = boost::core::type_name<T>();
+  inline static std::string PROTOTYPE_NAME = NAME + "PtrPrototype";
+  inline static std::string METATABLE_NAME = NAME + "PtrMetatable";
   inline static std::unordered_map<std::string, lua_CFunction> METHODS = {},
                                                                GETTERS = {},
                                                                SETTERS = {};
@@ -75,7 +78,7 @@ inline void push(lua_State* lua, T x) noexcept {
 
 // Pushes C style string into lua stack
 template <class T,
-          typename std::enable_if_t<std::is_same_v<T, const char*>, int> = 1>
+          typename std::enable_if_t<std::is_same_v<T, const char*>, int> = 0>
 inline void push(lua_State* lua, T s) noexcept {
   lua_pushstring(lua, s);
 }
@@ -84,7 +87,7 @@ inline void push(lua_State* lua, T s) noexcept {
 // std::string&` are ok. Does not receive `std::string`.
 template <class T,
           typename std::enable_if_t<
-              std::is_same_v<std::string, std::remove_const_t<T>>, int> = 2>
+              std::is_same_v<std::string, std::remove_const_t<T>>, int> = 0>
 inline void push(lua_State* lua, T& s) noexcept {
   lua_pushstring(lua, s.c_str());
 }
@@ -92,7 +95,7 @@ inline void push(lua_State* lua, T& s) noexcept {
 // Pushes any boost::describe annotated C++ class into lua stack.
 template <class T,
           typename std::enable_if_t<
-              boost::describe::has_describe_members<T>::value, int> = 3>
+              boost::describe::has_describe_members<T>::value, int> = 0>
 inline void push(lua_State* lua, T* x) {
   auto pptr = static_cast<T**>(lua_newuserdata(lua, sizeof(T*)));
   *pptr = x;
@@ -114,12 +117,25 @@ inline T pop(lua_State* lua) noexcept {
 // Due to potential memory free by lua GC, this function copy all string data
 // out.
 template <class T,
-          typename std::enable_if_t<std::is_same_v<std::string, T>, int> = 1>
+          typename std::enable_if_t<std::is_same_v<std::string, T>, int> = 0>
 inline T pop(lua_State* lua) noexcept {
   const char* c_str = lua_tostring(lua, -1);
   std::string ret = c_str;
   lua_pop(lua, 1);
   return ret;
+}
+
+// Pops user registered data type pointers. Here T is some pointer type.
+template <class T,
+          typename std::enable_if_t<boost::describe::has_describe_members<
+                                        std::remove_pointer_t<T>>::value,
+                                    int> = 0>
+inline auto pop(lua_State* lua) noexcept {
+  using RawT = typename std::remove_pointer_t<T>;
+  auto pptr = static_cast<RawT**>(
+      luaL_checkudata(lua, 1, ClazzMeta<RawT>::METATABLE_NAME.c_str()));
+  lua_pop(lua, 1);
+  return *pptr;
 }
 
 template <class T>
@@ -205,6 +221,88 @@ inline int register_prototype(lua_State* lua) {
 }
 
 template <class T>
+struct is_str_ref {
+  // Is std::string after decaying. And is a reference.
+  inline static constexpr bool value =
+      std::is_same_v<std::string, std::decay_t<T>> && std::is_reference_v<T>;
+};
+
+template <class T>
+inline constexpr bool is_str_ref_v = is_str_ref<T>::value;
+
+template <class T, typename std::enable_if_t<std::is_reference_v<T>, int> = 0>
+struct ref_to_ptr {
+  using type = typename std::remove_reference_t<T>*;
+};
+
+template <class T>
+using ref_to_ptr_t = typename ref_to_ptr<T>::type;
+
+template <class T>
+inline constexpr bool is_registered_type_pointer_v =
+    std::is_pointer_v<T> && boost::describe::has_describe_members<T>::value;
+
+template <class T>
+inline constexpr bool is_registered_type_ref_v =
+    std::is_reference_v<T> && boost::describe::has_describe_members<T>::value;
+
+template <class T>
+inline std::remove_pointer_t<T>& wrap_as_ref(T x) {
+  if constexpr (is_registered_type_pointer_v<T>) {
+    return *x;
+  } else {
+    return x;
+  }
+}
+
+template <class Tuple, size_t... Ns>
+inline auto wrap_as_ref_tp_impl(Tuple& tp, std::index_sequence<Ns...>) {
+  return std::tuple(wrap_as_ref(std::get<Ns>(tp))...);
+}
+
+template <class... Ts>
+inline auto wrap_as_ref_tp(std::tuple<Ts...>& tp) {
+  constexpr auto seq = std::make_index_sequence<sizeof...(Ts)>();
+  return wrap_as_ref_tp_impl(tp, seq);
+}
+
+template <class ArgTuple, size_t I>
+inline auto pop_args_impl(lua_State* lua, int index) noexcept {
+  constexpr size_t N = std::tuple_size_v<ArgTuple>;
+  using T = std::tuple_element_t<I, ArgTuple>;
+  // logf("=======================");
+  if constexpr (std::is_arithmetic_v<T>) {
+    // logf("number: %lf (I: %d, index: %d)", lua_tonumber(lua, index), I,
+    // index);
+    assert(lua_isnumber(lua, index));
+    return lua_tonumber(lua, index);
+  } else if constexpr (std::is_same_v<std::string, T>) {
+    // logf("string: %s (I: %d, index: %d)", lua_tostring(lua, index), I,
+    // index);
+    assert(lua_isstring(lua, index));
+    return std::string(lua_tostring(lua, index));
+  } else if constexpr (is_registered_type_ref_v<T>) {
+    using RawT = typename std::decay_t<T>;
+    auto pptr = static_cast<RawT**>(
+        luaL_checkudata(lua, index, ClazzMeta<RawT>::METATABLE_NAME.c_str()));
+    return std::ref(**pptr);
+  } else {
+    // Always fail check
+    static_assert(std::is_same_v<T, T*>, "Not supported type!");
+  }
+}
+
+template <class ArgTuple, size_t... I>
+inline auto pop_args(lua_State* lua, std::index_sequence<I...>) noexcept {
+  constexpr size_t N = sizeof...(I);
+  // pos(1) is `this` pointer, poses  starting from 2 are the args.
+  auto args = std::tuple(pop_args_impl<ArgTuple, I>(lua, 2 + int(I))...);
+  // logf("Popping %d args", sizeof...(I));
+  lua_pop(lua, int(N));
+  return args;
+}
+
+template <class T>
 inline void extract_methods() {
   using namespace boost::describe;
   using namespace boost::mp11;
@@ -218,38 +316,44 @@ inline void extract_methods() {
     static std::string meta_table_name =
         boost::core::type_name<T>() + "PtrMetatable";
     static const char* fn_name = func.name;
-    static const auto fn_ptr = func.pointer;
+    static auto fn_ptr = func.pointer;
 
     lua_CFunction method = [](lua_State* lua) -> int {
-      // Raw func type. It might have `const` or `noexcept` modifier.
-      // Signature sample: int f(int) const noexcept;
-      using FuncTRaw = typename member_pointer<decltype(fn_ptr)>::type;
+      // Raw func type after remove membership. It might have `const` or
+      // `noexcept` modifier. Signature sample: int f(int) const noexcept;
+      using FuncTRaw = typename member_pointer<decltype(func.pointer)>::type;
       // Remove const/noexcept
       using FuncT = remove_noexcept_t<remove_member_const_t<FuncTRaw>>;
       // Return type of function.
       using RetT = return_type_t<FuncT>;
       // A std::tuple<...> of types of all arguments.
       using ArgTupleTRaw = args_t<FuncT>;
-      // Remove ref/const/volatile modifiers. All values are copied from stack.
-      using ArgTupleT =
-          mp_transform<std::remove_cv_t,
-                       mp_transform<std::remove_reference_t, ArgTupleTRaw>>;
+      // Remove ref of std::string arguments because lua doesn't guarantee const
+      // char * is valid after it is popped from stack.
+      using ArgTupleTNoStrRef =
+          mp_transform_if<is_str_ref, std::remove_reference_t, ArgTupleTRaw>;
+      // Remove const/volatile modifilers because Lua has no such syntax.
+      using ArgTupleTNoCV = mp_transform<std::remove_cv_t, ArgTupleTNoStrRef>;
+      // Convert reference type as pointers.
+      using ArgTupleT = ArgTupleTNoCV;
 
       constexpr size_t N_ARG = std::tuple_size_v<ArgTupleT>;
-      ArgTupleT f_args;
       auto pptr =
           static_cast<T**>(luaL_checkudata(lua, 1, meta_table_name.c_str()));
-      // Extract all arguments into tuple in reverse order.
-      mp_for_each<mp_reverse<mp_iota_c<N_ARG>>>([lua, &f_args](auto I) {
-        // I is instance of std::integral_constant of size_t
-        using CurArgT = std::remove_reference_t<decltype(std::get<I>(f_args))>;
-        std::get<I>(f_args) = pop<CurArgT>(lua);
-      });
+      ArgTupleT f_args =
+          pop_args<ArgTupleT>(lua, std::make_index_sequence<N_ARG>());
       // Call member function with tuple, prepending reference of object ptr.
-      RetT res = std::apply(
-          fn_ptr, std::tuple_cat(std::make_tuple(std::ref(**pptr)), f_args));
-      push<RetT>(lua, res);
-      return 1;
+      if constexpr (std::is_same_v<RetT, void>) {
+        // Ignore void return value.
+        std::apply(fn_ptr,
+                   std::tuple_cat(std::make_tuple(std::ref(**pptr)), f_args));
+        return 0;
+      } else {
+        RetT res = std::apply(
+            fn_ptr, std::tuple_cat(std::make_tuple(std::ref(**pptr)), f_args));
+        push<RetT>(lua, res);
+        return 1;
+      }
     };
     ClazzMeta<T>::METHODS[fn_name] = method;
   });

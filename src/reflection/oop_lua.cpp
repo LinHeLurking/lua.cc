@@ -36,6 +36,8 @@ class ObjB {
 
   ObjB(int x, const std::string& y) : x_(x), y_(y) {}
 
+  // void rewrite_str(ObjB& another, const std::string& str) { another.y_ = str; }
+
   BOOST_DESCRIBE_CLASS(ObjB, (), (x_, y_), (), ());
 };
 
