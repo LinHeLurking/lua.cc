@@ -84,7 +84,7 @@ inline void push(lua_State* lua, T s) noexcept {
 }
 
 // Pushes C++ style string into lua stack. Both `std::string&` and `const
-// std::string&` are ok. 
+// std::string&` are ok.
 template <class T,
           typename std::enable_if_t<
               std::is_same_v<std::string, std::remove_const_t<T>>, int> = 0>
@@ -232,11 +232,13 @@ inline constexpr bool is_str_ref_v = is_str_ref<T>::value;
 
 template <class T>
 inline constexpr bool is_registered_type_pointer_v =
-    std::is_pointer_v<T> && boost::describe::has_describe_members<std::decay_t<T>>::value;
+    std::is_pointer_v<T> &&
+    boost::describe::has_describe_members<std::decay_t<T>>::value;
 
 template <class T>
 inline constexpr bool is_registered_type_ref_v =
-    std::is_reference_v<T> && boost::describe::has_describe_members<std::decay_t<T>>::value;
+    std::is_reference_v<T> &&
+    boost::describe::has_describe_members<std::decay_t<T>>::value;
 
 template <class ArgTuple, size_t I>
 inline auto pop_args_impl(lua_State* lua, int index) noexcept {
@@ -244,14 +246,17 @@ inline auto pop_args_impl(lua_State* lua, int index) noexcept {
   using T = std::tuple_element_t<I, ArgTuple>;
   if constexpr (std::is_arithmetic_v<T>) {
     assert(lua_isnumber(lua, index));
+    // logf("pop number at %d: %lf", index, lua_tonumber(lua, index));
     return lua_tonumber(lua, index);
   } else if constexpr (std::is_same_v<std::string, T>) {
     assert(lua_isstring(lua, index));
+    // logf("pop string at %d: %s", index, lua_tostring(lua, index));
     return std::string(lua_tostring(lua, index));
   } else if constexpr (is_registered_type_ref_v<T>) {
     using RawT = typename std::decay_t<T>;
     auto pptr = static_cast<RawT**>(
         luaL_checkudata(lua, index, ClazzMeta<RawT>::METATABLE_NAME.c_str()));
+    // logf("pop udata at %d: %p", index, *pptr);
     return std::ref(**pptr);
   } else {
     // Always fail check
@@ -262,8 +267,9 @@ inline auto pop_args_impl(lua_State* lua, int index) noexcept {
 template <class ArgTuple, size_t... I>
 inline auto pop_args(lua_State* lua, std::index_sequence<I...>) noexcept {
   constexpr size_t N = sizeof...(I);
-  // pos(1) is `this` pointer, poses  starting from 2 are the args.
-  auto args = std::tuple(pop_args_impl<ArgTuple, I>(lua, 2 + int(I))...);
+  // pos(-N-1) is `*this`, pos(-N) is the first argument and so on.
+  auto args =
+      std::tuple(pop_args_impl<ArgTuple, I>(lua, -int(N) + int(I))...);
   // logf("Popping %d args", sizeof...(I));
   lua_pop(lua, int(N));
   return args;
