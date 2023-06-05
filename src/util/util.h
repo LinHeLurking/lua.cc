@@ -84,7 +84,7 @@ inline void push(lua_State* lua, T s) noexcept {
 }
 
 // Pushes C++ style string into lua stack. Both `std::string&` and `const
-// std::string&` are ok. Does not receive `std::string`.
+// std::string&` are ok. 
 template <class T,
           typename std::enable_if_t<
               std::is_same_v<std::string, std::remove_const_t<T>>, int> = 0>
@@ -230,14 +230,6 @@ struct is_str_ref {
 template <class T>
 inline constexpr bool is_str_ref_v = is_str_ref<T>::value;
 
-template <class T, typename std::enable_if_t<std::is_reference_v<T>, int> = 0>
-struct ref_to_ptr {
-  using type = typename std::remove_reference_t<T>*;
-};
-
-template <class T>
-using ref_to_ptr_t = typename ref_to_ptr<T>::type;
-
 template <class T>
 inline constexpr bool is_registered_type_pointer_v =
     std::is_pointer_v<T> && boost::describe::has_describe_members<std::decay_t<T>>::value;
@@ -246,39 +238,14 @@ template <class T>
 inline constexpr bool is_registered_type_ref_v =
     std::is_reference_v<T> && boost::describe::has_describe_members<std::decay_t<T>>::value;
 
-template <class T>
-inline std::remove_pointer_t<T>& wrap_as_ref(T x) {
-  if constexpr (is_registered_type_pointer_v<T>) {
-    return *x;
-  } else {
-    return x;
-  }
-}
-
-template <class Tuple, size_t... Ns>
-inline auto wrap_as_ref_tp_impl(Tuple& tp, std::index_sequence<Ns...>) {
-  return std::tuple(wrap_as_ref(std::get<Ns>(tp))...);
-}
-
-template <class... Ts>
-inline auto wrap_as_ref_tp(std::tuple<Ts...>& tp) {
-  constexpr auto seq = std::make_index_sequence<sizeof...(Ts)>();
-  return wrap_as_ref_tp_impl(tp, seq);
-}
-
 template <class ArgTuple, size_t I>
 inline auto pop_args_impl(lua_State* lua, int index) noexcept {
   constexpr size_t N = std::tuple_size_v<ArgTuple>;
   using T = std::tuple_element_t<I, ArgTuple>;
-  // logf("=======================");
   if constexpr (std::is_arithmetic_v<T>) {
-    // logf("number: %lf (I: %d, index: %d)", lua_tonumber(lua, index), I,
-    // index);
     assert(lua_isnumber(lua, index));
     return lua_tonumber(lua, index);
   } else if constexpr (std::is_same_v<std::string, T>) {
-    // logf("string: %s (I: %d, index: %d)", lua_tostring(lua, index), I,
-    // index);
     assert(lua_isstring(lua, index));
     return std::string(lua_tostring(lua, index));
   } else if constexpr (is_registered_type_ref_v<T>) {
@@ -334,7 +301,6 @@ inline void extract_methods() {
           mp_transform_if<is_str_ref, std::remove_reference_t, ArgTupleTRaw>;
       // Remove const/volatile modifilers because Lua has no such syntax.
       using ArgTupleTNoCV = mp_transform<std::remove_cv_t, ArgTupleTNoStrRef>;
-      // Convert reference type as pointers.
       using ArgTupleT = ArgTupleTNoCV;
 
       constexpr size_t N_ARG = std::tuple_size_v<ArgTupleT>;
