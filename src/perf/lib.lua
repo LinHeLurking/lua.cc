@@ -1,6 +1,5 @@
-local math = require("math")
-
 function exec_lua(worker)
+    local math = require("math")
     local x = worker.a_ * worker:f()
     local y = worker.b_ * worker:g()
     local z = worker.c_ * worker:h()

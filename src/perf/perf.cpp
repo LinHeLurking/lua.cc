@@ -1,10 +1,12 @@
 #include <boost/describe/class.hpp>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <functional>
 #include <iostream>
 #include <random>
 #include <ratio>
+#include <string>
 
 #include "../util/oop_lua.h"
 #include "../util/util.h"
@@ -13,7 +15,7 @@ class Worker {
  private:
   std::mt19937 rng_;
   std::normal_distribution<double> ndist_{0.0, 10.0};
-  static constexpr size_t LOOP_CNT = 50000;
+  static constexpr size_t LOOP_CNT = 500000;
 
   inline double sample() noexcept { return ndist_(rng_); }
 
@@ -88,12 +90,12 @@ double repeat_test(std::function<double(Worker&)> fn, size_t n) noexcept {
 }
 
 int main(int argc, char** argv) {
-  if (argc < 2) {
-    std::cout << "Usage: <executable> <lua_file>" << std::endl;
+  if (argc < 3) {
+    std::cout << "Usage: <executable> <lua_file> <exec_time>" << std::endl;
     return -1;
   }
   const char* file_name = argv[1];
-  size_t n = 1000;
+  size_t n = std::stoi(argv[2]);
   Lua lua({file_name});
   lua.register_type<Worker>();
   auto cxx_duration = repeat_test(exec_cxx, n);
