@@ -1,6 +1,7 @@
 #include "../util/oop_lua.h"
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "../common/logging.h"
@@ -143,6 +144,16 @@ int main(int argc, char** argv) {
     logf("This is obj a: {x_: %d, y_: %s}", obj_a.x_, obj_a.y_.c_str());
     lua.call("consume_obj_b", Lua::IGNORED, &obj_b);
     logf("This is obj b: {u_: %s, v_: %d}", obj_b.u_.c_str(), obj_b.v_);
+  }
+
+  {
+    logf("--------------------------------------------");
+    logf("Using C++ map in lua");
+    lua.register_map_type<int, int>();
+    std::unordered_map<int, int> mp;
+    mp[1] = 2;
+    mp[2] = 3;
+    lua.call("map_query", Lua::IGNORED, &mp, 1);
   }
 
   return 0;

@@ -52,3 +52,12 @@ function lib.a_and_b(a, b)
   end
   return a and b
 end
+
+function map_query(mp, key)
+  print(getmetatable(mp))
+  for k, v in pairs(getmetatable(mp)) do
+    print(k, v)
+  end
+  print("[Lua] key: " .. key)
+  print('value of key " ' .. key .. ' " in map: ' .. mp:at(key))
+end

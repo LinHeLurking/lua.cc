@@ -44,9 +44,7 @@ class Lua {
     // In most cases it's 1.
     static constexpr size_t count = 1;
 
-    inline static void extract_res(Lua* lua, T& ret) {
-      ret = lua->pop<T>();
-    }
+    inline static void extract_res(Lua* lua, T& ret) { ret = lua->pop<T>(); }
   };
 
   // Nop if lua does not return;
@@ -94,6 +92,11 @@ class Lua {
   template <class T>
   inline void register_type() {
     lua_detail::register_type<T>(lua_);
+  }
+
+  template <class K, class V>
+  inline void register_map_type() {
+    lua_detail::register_map_type<K, V>(lua_);
   }
 
   template <class T>

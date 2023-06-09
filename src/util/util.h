@@ -11,6 +11,7 @@
 #include <boost/describe/modifiers.hpp>
 #include <boost/mp11/algorithm.hpp>
 #include <boost/mp11/tuple.hpp>
+#include <exception>
 #include <functional>
 #include <regex>
 #include <tuple>
@@ -104,8 +105,30 @@ template <class T,
 inline void push(lua_State* lua, T* x) {
   auto pptr = static_cast<T**>(lua_newuserdata(lua, sizeof(T*)));
   *pptr = x;
-  static std::string meta_table_name =
-      boost::core::type_name<T>() + "PtrMetatable";
+  static std::string meta_table_name = ClazzMeta<T>::METATABLE_NAME;
+  luaL_newmetatable(lua, meta_table_name.c_str());
+  lua_setmetatable(lua, -2);
+}
+
+template <typename T, typename U = void>
+struct is_mappish_impl : std::false_type {};
+
+template <typename T>
+struct is_mappish_impl<
+    T, std::void_t<typename T::key_type, typename T::mapped_type,
+                   decltype(std::declval<T&>()
+                                [std::declval<const typename T::key_type&>()])>>
+    : std::true_type {};
+
+template <typename T>
+struct is_mappish : is_mappish_impl<T>::type {};
+
+// Pushes map type
+template <class T, typename std::enable_if_t<is_mappish<T>::value, int> = 0>
+inline void push(lua_State* lua, T* x) {
+  auto pptr = static_cast<T**>(lua_newuserdata(lua, sizeof(T*)));
+  *pptr = x;
+  static std::string meta_table_name = ClazzMeta<T>::METATABLE_NAME;
   luaL_newmetatable(lua, meta_table_name.c_str());
   lua_setmetatable(lua, -2);
 }
@@ -227,6 +250,106 @@ inline int register_prototype(lua_State* lua) {
 
   // Pop prototype table
   lua_pop(lua, 1);
+
+  return 0;
+}
+
+template <class K, class V>
+int lua_map_at(lua_State* lua) {
+  using T = std::unordered_map<K, V>;
+  auto pptr = static_cast<T**>(
+      luaL_checkudata(lua, -2, ClazzMeta<T>::METATABLE_NAME.c_str()));
+  K key = pop<K>(lua);
+  V value = (*pptr)->at(key);
+  push(lua, value);
+  return 1;
+}
+
+template <class K, class V>
+inline int register_map_type(lua_State* lua) noexcept {
+  using T = std::unordered_map<K, V>;
+  ClazzMeta<T>::PROTOTYPE_NAME = std::regex_replace(
+      ClazzMeta<T>::PROTOTYPE_NAME, std::regex(":|<|>| |,"), "_");
+  ClazzMeta<T>::METATABLE_NAME = std::regex_replace(
+      ClazzMeta<T>::METATABLE_NAME, std::regex(":|<|>| |,"), "_");
+  logf("Map prototype name: %s", ClazzMeta<T>::PROTOTYPE_NAME.c_str());
+  logf("Map metatbale name: %s", ClazzMeta<T>::METATABLE_NAME.c_str());
+
+  int flag;
+  std::string prototype_exec_str =
+      "\
+      __prototype__ = { \n \
+        __methods = {}, \n \
+        __getters = {}, \n \
+        __setters = {}, \n \
+      }\n \
+      function __prototype__.__impl_index(self, key) \n \
+        if __prototype__.__methods[key] ~= nil then \n \
+          return __prototype__.__methods[key] \n \
+        end \n \
+        if __prototype__.__getters[key] ~= nil then \n \
+          return __prototype__.__getters[key](self) \n \
+        end \n \
+        return nil \n \
+      end \n \
+      function __prototype__.__impl_newindex(self, key, value) \n \
+        if __prototype__.__setters[key] ~= nil then \n \
+          __prototype__.__setters[key](self, value) \n \
+        end \n \
+      end \n \
+      ";
+  // Replace `__prototype__` as type ptr name
+  prototype_exec_str =
+      std::regex_replace(prototype_exec_str, std::regex("__prototype__"),
+                         ClazzMeta<T>::PROTOTYPE_NAME);
+  flag = luaL_dostring(lua, prototype_exec_str.c_str());
+  if (flag != 0) {
+    logf("Do string error: %s", lua_tostring(lua, -1));
+    return flag;
+  }
+  // Prepare luaL_Reg
+  std::vector<luaL_Reg> methods, getters, setters;
+  methods.push_back({"at", lua_map_at<K, V>});
+  methods.push_back({nullptr, nullptr});
+  getters.push_back({nullptr, nullptr});
+  setters.push_back({nullptr, nullptr});
+
+  // Query prototype table and push it to stack
+  lua_getglobal(lua, ClazzMeta<T>::PROTOTYPE_NAME.c_str());  // will push
+
+  // Extract field table `__methods`
+  lua_getfield(lua, -1, "__methods");
+  assert(lua_istable(lua, -1));
+  // Register methods into `__methods` table.
+  luaL_register(lua, nullptr, methods.data());
+  // Pop table.
+  lua_pop(lua, 1);
+
+  flag = luaL_newmetatable(lua,
+                           ClazzMeta<T>::METATABLE_NAME.c_str());  // will push
+  if (!flag) {
+    logf("Meta table has already been created!");
+    return 1;
+  }
+  assert(lua_istable(lua, -1));
+
+  // Now stack pos top (-1) is meta-table.
+  // Next one (-2) is prototype table.
+  // Extract function `__impl_index`
+  lua_getfield(lua, -2, "__impl_index");  // will push
+  assert(lua_isfunction(lua, -1));
+  lua_getfield(lua, -3, "__impl_newindex");  // will push
+  assert(lua_isfunction(lua, -1));
+
+  // -1: `__impl_newindex`
+  // -2: `__impl_index`
+  // -3: meta-table
+  // -4: prototype table
+
+  lua_setfield(lua, -3, "__newindex");  // will pop
+  lua_setfield(lua, -2, "__index");     // will pop
+  // Clear stack
+  lua_pop(lua, 2);
 
   return 0;
 }
