@@ -44,7 +44,9 @@ class Lua {
     // In most cases it's 1.
     static constexpr size_t count = 1;
 
-    inline static void extract_res(Lua* lua, T& ret) { ret = lua->pop<T>(); }
+    inline static void extract_res(Lua* lua, T& ret) {
+      ret = lua->pop<T>();
+    }
   };
 
   // Nop if lua does not return;
@@ -111,6 +113,25 @@ class Lua {
     constexpr int nresults = int(ret_helper<Ret>::count);
     int flag = protected_call(nargs, nresults, 0);
     ret_helper<Ret>::extract_res(this, ret);
+    return flag;
+  }
+
+  template <class Ret, class... Arg>
+  int call_in_table(const char* table, const char* lua_func_name, Ret& ret,
+                    Arg&&... arg) {
+    lua_getglobal(lua_, table);
+    assert(lua_istable(lua_, -1));
+    lua_getfield(lua_, -1, lua_func_name);
+    // Push all arguments
+    (push(arg), ...);
+    // Count the number of arguments
+    constexpr int nargs = int(sizeof...(Arg));
+    // Count the number of return values.
+    constexpr int nresults = int(ret_helper<Ret>::count);
+    int flag = protected_call(nargs, nresults, 0);
+    ret_helper<Ret>::extract_res(this, ret);
+    assert(lua_istable(lua_, -1));
+    lua_pop(lua_, 1);
     return flag;
   }
 };

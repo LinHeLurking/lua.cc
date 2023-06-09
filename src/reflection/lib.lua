@@ -40,3 +40,15 @@ end
 function overwrite_append(x, y)
   x:overwrite_append(y, " [[ Modified in Lua! ]] ")
 end
+
+lib = {}
+
+function lib.a_and_b(a, b)
+  print("[Lua] Calculate a and b.")
+  if a and b then
+    print("[Lua] Returning true")
+  else
+    print("[Lua] Returning false")
+  end
+  return a and b
+end

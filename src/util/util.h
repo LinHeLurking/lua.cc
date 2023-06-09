@@ -65,6 +65,7 @@ class ClazzMeta {
   inline static std::unordered_map<std::string, lua_CFunction> METHODS = {},
                                                                GETTERS = {},
                                                                SETTERS = {};
+  inline static bool REGISTERED = false;
 };
 
 using IgnoredRetT = void*;
@@ -73,7 +74,11 @@ inline static IgnoredRetT IGNORED = 0;
 // Pushes int/float/double... values into lua stack
 template <class T, typename std::enable_if_t<std::is_arithmetic_v<T>, int> = 0>
 inline void push(lua_State* lua, T x) noexcept {
-  lua_pushnumber(lua, x);
+  if constexpr (std::is_same_v<bool, std::decay_t<T>>) {
+    lua_pushboolean(lua, x);
+  } else {
+    lua_pushnumber(lua, x);
+  }
 }
 
 // Pushes C style string into lua stack
@@ -108,9 +113,15 @@ inline void push(lua_State* lua, T* x) {
 // Pops int/float/double.. values from lua stack.
 template <class T, typename std::enable_if_t<std::is_arithmetic_v<T>, int> = 0>
 inline T pop(lua_State* lua) noexcept {
-  T ret = lua_tonumber(lua, -1);
-  lua_pop(lua, 1);
-  return ret;
+  if constexpr (std::is_same_v<bool, std::decay_t<T>>) {
+    T ret = lua_toboolean(lua, -1);
+    lua_pop(lua, 1);
+    return ret;
+  } else {
+    T ret = lua_tonumber(lua, -1);
+    lua_pop(lua, 1);
+    return ret;
+  }
 }
 
 // Pops C++ style string from lua stack.
@@ -268,8 +279,7 @@ template <class ArgTuple, size_t... I>
 inline auto pop_args(lua_State* lua, std::index_sequence<I...>) noexcept {
   constexpr size_t N = sizeof...(I);
   // pos(-N-1) is `*this`, pos(-N) is the first argument and so on.
-  auto args =
-      std::tuple(pop_args_impl<ArgTuple, I>(lua, -int(N) + int(I))...);
+  auto args = std::tuple(pop_args_impl<ArgTuple, I>(lua, -int(N) + int(I))...);
   // logf("Popping %d args", sizeof...(I));
   lua_pop(lua, int(N));
   return args;
@@ -404,6 +414,8 @@ inline int register_metatable(lua_State* lua) {
 
 template <class T>
 inline void register_type(lua_State* lua) {
+  if (ClazzMeta<T>::REGISTERED) return;
+
   extract_methods<T>();
 
   extract_getter_setter<T>();
@@ -419,5 +431,7 @@ inline void register_type(lua_State* lua) {
     logf("Metatable register error: %s", lua_tostring(lua, -1));
     return;
   }
+
+  ClazzMeta<T>::REGISTERED = true;
 }
 }  // namespace lua_detail

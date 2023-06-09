@@ -98,7 +98,15 @@ int main(int argc, char** argv) {
     logf("--------------------------------------------");
     double sum = -1;
     lua.call("a_plus_b", sum, 1.0, 2.0);
-    logf("a + b = %lf", sum);
+    logf("a + b : %lf", sum);
+  }
+
+  {
+    logf("--------------------------------------------");
+    logf("Calling some function inside lua table(namespace)");
+    bool is_ge = true;
+    lua.call_in_table("lib", "a_and_b", is_ge, true, false);
+    logf("a && b : %s", is_ge ? "true" : "false");
   }
 
   {
